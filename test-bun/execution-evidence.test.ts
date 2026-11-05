@@ -99,6 +99,43 @@ test.concurrent('each literal command in a package script, and each page script,
   } finally { await rm(root, { recursive: true, force: true }) }
 })
 
+test.concurrent('an included extensionless Node.js launcher is a JavaScript source and its start script a container', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'groma-js-launcher-'))
+  try {
+    await cp(path.resolve(import.meta.dir, '../test/fixtures/empty-project'), root, { recursive: true })
+    const source = {
+      'package.json': JSON.stringify({ scripts: { start: 'node bin/www', build: 'bun build ./app.js' } }),
+      // The HTTP reader has the type checker read these callbacks, which fails for a file named without an extension.
+      'bin/www': [
+        '#!/usr/bin/env node',
+        "const http = require('node:http');",
+        "const app = require('../app');",
+        'const server = http.createServer(app);',
+        'app.ready.then(() => new Promise(resolve => { server.listen({ port: 3000, backlog: 511 }); })).then(() => {});',
+      ].join('\n'),
+      'bin/flagged': '#!/usr/bin/env -S NODE_ENV=production node --no-warnings\nconsole.log(1)\n',
+      'bin/shell': '#!/bin/sh\nexec node bin/www\n',
+      'app.js': "const routes = require('./routes');\nmodule.exports = { listen() { routes(); } };\n",
+      'routes.js': 'module.exports = function routes() {};\n',
+    }
+    for (const [file, text] of Object.entries(source)) {
+      await mkdir(path.dirname(path.join(root, file)), { recursive: true })
+      await writeFile(path.join(root, file), text)
+    }
+    expect(await Bun.spawn(['git', 'init', '--quiet'], { cwd: root }).exited).toBe(0)
+    const files = [...await defaultFiles(root, 'javascript'), 'bin/www', 'bin/flagged', 'bin/shell']
+    expect((await javascript.listSourceFiles!(root, {}, files)).sort()).toEqual(['app.js', 'bin/flagged', 'bin/www', 'routes.js'])
+    const scan = (await javascript.scan(root, {}, files))!
+    expect(scan.entryPoints?.map(entry => entry.file)).toEqual(['bin/www'])
+    expect(scan.entryPoints![0]!.files.sort()).toEqual(['app.js', 'bin/www', 'routes.js'])
+    await reconcileScanObservations(root, [scan])
+    const model = await loadAnnotatedArchitecture(root)
+    const container = model.elements.find(element => element.kind === 'container')!
+    const owner = (file: string) => model.elements.find(element => element.code.some(reference => reference.file === file))!
+    for (const file of ['bin/www', 'app.js', 'routes.js']) expect(owner(file).parent).toBe(container.id)
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
 test.concurrent('declared commands and browser builds share source identity across declarations and scanner subsets', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'groma-js-entries-'))
   try {

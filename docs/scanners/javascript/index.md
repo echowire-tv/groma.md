@@ -1,7 +1,7 @@
 # JavaScript scanner
 
-The JavaScript scanner reads the `.js`, `.mjs`, `.cjs` and `.jsx` files
-groma.md hands it, covering ECMAScript modules, CommonJS modules and browser scripts.
+The JavaScript scanner reads the `.js`, `.mjs`, `.cjs` and `.jsx` files, and
+the Node.js launchers without an extension, that groma.md hands it, covering ECMAScript modules, CommonJS modules and browser scripts.
 It does not require Node.js, installed packages, a bundler, a project build or a
 `tsconfig.json`. Discovery matches JavaScript source directly, even without a
 package manifest.
@@ -41,6 +41,12 @@ output, such as `jquery-ui.min.js`, and `node_modules`, `dist`, `build` and
 `coverage` folders. The scan and the readiness check read only the files the
 lists select.
 
+A Node.js launcher without an extension, such as `bin/www`, is read when the
+include list names it and its first line runs `node`, directly or through
+`env`, as `#!/usr/bin/env node` does. No glob selects files without an
+extension, so a project adds the file's path to the scanner's `include` list in
+`config.json`.
+
 A bundle under an ordinary name, such as `vendor.js`, is read like any other
 source; a project that keeps it out adds a pattern to `config.json`.
 
@@ -76,7 +82,8 @@ Each literal local `node`, `bun`, `tsx` or `ts-node` command in an unquoted
 `&&`-chained package script can supply an execution entry. Environment
 assignments or `cross-env` may come before the runtime, and runtime options and
 a `run` or `watch` subcommand before the script; the first remaining word must
-name the script, so a preloaded module or `bun build` supplies none. An HTML
+name the script, a file with a JavaScript or TypeScript extension or a path
+such as `bin/www`, so a preloaded module or `bun build` supplies none. An HTML
 page's script supplies one too, named after the page, or after its folder for
 an `index.html`. A `package.json`, `angular.json` or `project.json` that is not
 valid JSON supplies none: the scan continues and reports a warning for that file.
