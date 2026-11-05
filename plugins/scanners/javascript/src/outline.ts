@@ -4,6 +4,7 @@ import type { CodeFile, SourceReference } from '@groma/scanner'
 import ts from 'typescript'
 import { outlineClassExpression, outlineSource } from '../../typescript-outline.ts'
 import { assignedValue, commonJsExport, topLevelDeclarations } from './declarations.ts'
+import { parseJavaScript } from './sources.ts'
 
 /** A `.mjs` or `.cjs` file is a module whatever it contains. */
 const MODULE_EXTENSION = /\.(?:mjs|cjs)$/
@@ -69,7 +70,7 @@ export async function readJavaScriptOutline(
   for (const reference of references) {
     const fileName = path.join(repositoryRoot, reference.file)
     const text = await readFile(fileName, 'utf8')
-    const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true)
+    const source = parseJavaScript(fileName, text)
     const exported = publishedNames(reference.file, source)
     const classes = source.statements.flatMap(statement => {
       const assignment = commonJsExport(statement)

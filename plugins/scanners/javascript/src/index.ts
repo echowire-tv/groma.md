@@ -31,9 +31,9 @@ function parseWarning({ file, syntax }: JavaScriptSource): ScanDiagnostic | unde
 
 export default {
   id: 'javascript',
-  listSourceFiles: async (_root, _settings, candidates) => javaScriptFiles(candidates),
-  async checkReadiness(_root, _settings, files) {
-    if (!javaScriptFiles(files).length) {
+  listSourceFiles: async (root, _settings, candidates) => javaScriptFiles(root, candidates),
+  async checkReadiness(root, _settings, files) {
+    if (!(await javaScriptFiles(root, files)).length) {
       throw new Error('javascript: No JavaScript source files were found in the Git repository.')
     }
   },

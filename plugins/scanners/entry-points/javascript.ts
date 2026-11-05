@@ -25,6 +25,8 @@ const RUNTIMES = new Set(['node', 'bun', 'tsx', 'ts-node'])
 /** Runtime options whose value is the next word, such as a preloaded module or a config file, never the script. */
 const VALUE_OPTIONS = new Set(['-r', '--require', '--import', '--tsconfig'])
 const SCRIPT = /^[\w./-]+\.[cm]?[jt]sx?$/
+/** A script names a JavaScript or TypeScript file, or any path such as `bin/www`; a bare word is a subcommand, as in `bun build`. */
+const isScript = (word: string) => SCRIPT.test(word) || word.includes('/')
 
 /** The position of a command's program, after environment assignments such as `NODE_ENV=production` or `cross-env`. */
 function runtimeAt(words: readonly string[]): number {
@@ -46,7 +48,7 @@ function commandScript(command: string): string | undefined {
     const word = words[index]!
     if (VALUE_OPTIONS.has(word)) index += 1
     else if (subcommand && (word === 'run' || word === 'watch')) subcommand = false
-    else if (!word.startsWith('-')) return SCRIPT.test(word) ? word : undefined
+    else if (!word.startsWith('-')) return isScript(word) ? word : undefined
   }
   return undefined
 }
