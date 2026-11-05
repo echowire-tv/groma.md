@@ -1,0 +1,19 @@
+# Copy this file and groma-pipeline.mjs to the root of the Bitbucket repository.
+# groma.md: integrations/bitbucket-forge/README.md
+image: node:26.12.1
+
+pipelines:
+  pull-requests:
+    '**':
+      - step:
+          name: Groma architecture comparison
+          clone:
+            depth: full
+          script:
+            - node groma-pipeline.mjs comparison
+  custom:
+    groma-cleanup:
+      - step:
+          name: Delete Groma comparisons of closed pull requests
+          script:
+            - node groma-pipeline.mjs cleanup

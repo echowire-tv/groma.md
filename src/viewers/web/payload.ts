@@ -48,6 +48,11 @@ export interface PublishedReads {
   sources: { file: string; source: SourcePayload }[]
 }
 
+declare global {
+  /** Reads a source file left out of a published view, at that view's commit. An embedding page sets it before render.js runs. */
+  var gromaReadSource: ((file: string, commit: string) => Promise<SourcePayload>) | undefined
+}
+
 /** One ordinary or comparison view, already prepared by the same owners as live delivery. */
 export interface PublishedView {
   payload: WebPayload

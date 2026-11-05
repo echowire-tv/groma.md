@@ -7,7 +7,7 @@ import { olderFirst, readGitRevision, type GitRevision } from '../../history/rev
 import { atRevision, readSourceTexts } from '../../history/snapshots.ts'
 import { measuredSheetScene } from '../../sheet/scene.ts'
 import { outlineSourceFiles, readSnapshotCodeStructure } from '../source/structure.ts'
-import { renderPage } from './page.ts'
+import { pageStyle, renderPage } from './page.ts'
 import { PUBLISHED_EVENT, PUBLISHED_VERSION_EVENT } from './payload.ts'
 import type { PublishedView, WebBootPayload } from './payload.ts'
 import { bundleRenderer, loadMapRoot } from './runtime.ts'
@@ -23,6 +23,8 @@ export interface WebExportOptions {
   url?: string
   revision?: string
   from?: string
+  /** Leave source text out of every view; the embedding page reads files by commit through `gromaReadSource`. */
+  hostSources?: boolean
   watch?: boolean
   onError?: (error: unknown) => void
 }
@@ -92,8 +94,16 @@ async function publishedSnapshot(root: string, revisions: GitRevision[], generat
   })
 }
 
+/** Comparison hunks are already computed from the texts, so the views no longer need them. */
+function withoutSources(snapshot: WebBootPayload): WebBootPayload {
+  if (snapshot.delivery.kind !== 'published') return snapshot
+  const views = snapshot.delivery.views.map(view => ({ ...view, reads: { ...view.reads, sources: [] } }))
+  return { ...snapshot, delivery: { kind: 'published', views } }
+}
+
 async function exportRevisions(root: string, options: WebExportOptions): Promise<GitRevision[]> {
   if (options.from !== undefined && options.revision === undefined) throw new Error('--from requires --revision; comparison exports need two commits')
+  if (options.hostSources && options.revision === undefined) throw new Error('--host-sources requires --revision; the host reads source files by commit')
   if (options.revision === undefined) return []
   const to = await readGitRevision(root, options.revision)
   if (options.from === undefined) return [to]
@@ -139,6 +149,11 @@ export async function exportWebViewer(
   async function publish(): Promise<void> {
     const snapshot = await publishedSnapshot(repositoryRoot, revisions, ++generation)
     if (closed) return
+    if (options.hostSources) {
+      await replaceFile(path.join(output, 'style.css'), pageStyle)
+      await replaceFile(path.join(output, 'index.html'), renderPage(withoutSources(snapshot), url, 'linked'))
+      return
+    }
     const covers = await generateCovers(snapshot)
     for (const theme of coverThemes) await replaceFile(path.join(output, coverFile(theme)), covers[theme])
     await replaceFile(path.join(output, 'snapshot.js'), snapshotScript(snapshot))

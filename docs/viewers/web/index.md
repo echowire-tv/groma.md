@@ -87,6 +87,21 @@ commit, and the revision picker offers the two exported commits.
 contents, and outlines; `web/data.ts` selects those bundled views through the
 same read boundary used by the live viewer.
 
+### Embedding pages that read source files
+
+```sh
+groma export ./site --from "$BASE_SHA" --revision "$HEAD_SHA" --host-sources
+```
+
+writes only `index.html`, `style.css`, and `render.js`. The page leaves out source
+file text and links the stylesheet instead of inlining it, so it stays small: a
+comparison carries its architecture and the diff hunks of changed files. Before
+it loads `render.js`, the embedding page sets
+`globalThis.gromaReadSource(file, commit)`, which `web/data.ts` calls for any
+other file the viewer opens. Without that reader, opening such a file reports
+that it is not found. The [Bitbucket Forge panel](../../../integrations/bitbucket-forge/README.md)
+is the embedding page this option exists for.
+
 ### Social previews
 
 Export also writes `cover-light.png`, `cover-dark.png`, and `cover-blueprint.png`
