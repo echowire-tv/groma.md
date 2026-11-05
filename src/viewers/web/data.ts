@@ -121,9 +121,12 @@ function publishedDataSource(boot: WebBootPayload): WebDataSource {
       return publishedView(snapshot, revision, from).reads.code.find(item => item.element === element)?.files ?? []
     },
     async readSource(_element, file, revision, from) {
-      const found = publishedView(snapshot, revision, from).reads.sources.find(item => item.file === file)
-      if (found === undefined) throw new Error('Source file not found')
-      return found.source
+      const view = publishedView(snapshot, revision, from)
+      const found = view.reads.sources.find(item => item.file === file)
+      if (found !== undefined) return found.source
+      const commit = view.payload.revision?.id
+      if (globalThis.gromaReadSource === undefined || commit === undefined) throw new Error('Source file not found')
+      return globalThis.gromaReadSource(file, commit)
     },
     async readTask() {
       throw new Error('Tasks are unavailable in static Groma')

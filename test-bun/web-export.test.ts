@@ -1,19 +1,32 @@
 import { expect, test } from 'bun:test'
-import { cp, mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
+import { cp, mkdtemp, readdir, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { exportWebViewer, type WebExportOptions } from '../src/viewers/web/export.ts'
 import { createWebDataSource, openWebBoot } from '../src/viewers/web/data.ts'
+import { pageStyle } from '../src/viewers/web/page.ts'
 import type { WebBootPayload } from '../src/viewers/web/payload.ts'
 
 const fixture = path.resolve(import.meta.dir, '../test/fixtures/source-view')
+async function bootPayload(html: string): Promise<WebBootPayload> {
+  let json = ''
+  await new HTMLRewriter().on('script#world', { text(chunk) { json += chunk.text } }).transform(new Response(html)).text()
+  return JSON.parse(json)
+}
+
 async function publish(root: string, options: WebExportOptions = {}): Promise<WebBootPayload> {
   const output = path.join(root, 'site')
   await (await exportWebViewer(root, output, options)).close()
-  let json = ''
-  await new HTMLRewriter().on('script#world', { text(chunk) { json += chunk.text } })
-    .transform(new Response(await readFile(path.join(output, 'index.html'), 'utf8'))).text()
-  return JSON.parse(json)
+  return bootPayload(await readFile(path.join(output, 'index.html'), 'utf8'))
+}
+
+function gitIn(root: string) {
+  return async (...args: string[]) => {
+    const process = Bun.spawn(['git', ...args], { cwd: root, stdout: 'pipe', stderr: 'pipe' })
+    const output = await new Response(process.stdout).text()
+    expect(await process.exited).toBe(0)
+    return output.trim()
+  }
 }
 
 function expectNoWork(payload: WebBootPayload): void {
@@ -49,12 +62,7 @@ test.concurrent('working-tree export retains uncommitted source and contains one
 
 test.concurrent('commit export and its one older-to-newer comparison use only bundled commits independently of checkout', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'groma-export-commits-'))
-  const git = async (...args: string[]) => {
-    const process = Bun.spawn(['git', ...args], { cwd: root, stdout: 'pipe', stderr: 'pipe' })
-    const output = await new Response(process.stdout).text()
-    expect(await process.exited).toBe(0)
-    return output.trim()
-  }
+  const git = gitIn(root)
   try {
     await cp(fixture, root, { recursive: true })
     await git('init', '--quiet')
@@ -94,5 +102,39 @@ test.concurrent('commit export and its one older-to-newer comparison use only bu
     await expect(data.readWorld('unbundled')).rejects.toThrow()
     expect(await git('rev-parse', 'HEAD')).toBe(before)
     expect(await readFile(path.join(root, 'src/orders.ts'), 'utf8')).toContain('localOnly')
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+test.concurrent('a host-sources comparison keeps its hunks, leaves out source text and reads other files through the host', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'groma-export-host-'))
+  const git = gitIn(root)
+  try {
+    await cp(fixture, root, { recursive: true })
+    await git('init', '--quiet')
+    await git('config', 'core.autocrlf', 'false')
+    await git('add', '.')
+    await git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '--quiet', '-m', 'Record orders')
+    const before = await git('rev-parse', 'HEAD')
+    const source = await readFile(path.join(root, 'src/orders.ts'), 'utf8')
+    await writeFile(path.join(root, 'src/orders.ts'), source.replace('return lines', 'return lines + 1'))
+    await git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '--quiet', '-am', 'Include delivery')
+    const after = await git('rev-parse', 'HEAD')
+
+    const output = path.join(root, 'site')
+    await (await exportWebViewer(root, output, { from: before, revision: after, hostSources: true })).close()
+    expect((await readdir(output)).sort()).toEqual(['index.html', 'render.js', 'style.css'])
+    const html = await readFile(path.join(output, 'index.html'), 'utf8')
+    expect(html).not.toContain(pageStyle)
+    const boot = await bootPayload(html)
+    expect(boot.delivery.kind === 'published' && boot.delivery.views.map(view => view.reads.sources)).toEqual([[], [], []])
+    expect(boot.comparison?.components.orders?.files[0]?.hunks.length).toBeGreaterThan(0)
+
+    const data = createWebDataSource(boot)
+    await expect(data.readSource('orders', 'src/orders.ts', before)).rejects.toThrow('Source file not found')
+    globalThis.gromaReadSource = async (file, commit) => ({ source: `${commit}:${file}` })
+    try {
+      expect((await data.readSource('orders', 'src/orders.ts', before)).source).toBe(`${before}:src/orders.ts`)
+      expect((await data.readSource('orders', 'src/orders.ts', after, before)).source).toBe(`${after}:src/orders.ts`)
+    } finally { globalThis.gromaReadSource = undefined }
   } finally { await rm(root, { recursive: true, force: true }) }
 })

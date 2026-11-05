@@ -132,7 +132,7 @@ async function initializeProject(
   }
 }
 
-async function exportWeb(directory: string, options: { url?: string; revision?: string; from?: string }): Promise<void> {
+async function exportWeb(directory: string, options: { url?: string; revision?: string; from?: string; hostSources?: boolean }): Promise<void> {
   const root = process.cwd()
   const { exportWebViewer } = await import('./viewers/web/export.ts')
   const exported = await exportWebViewer(root, directory, options)
@@ -244,12 +244,13 @@ program
   .option('--url <url>', 'public URL of the exported directory, for social previews')
   .option('--revision <commit>', 'export this commit instead of the working tree')
   .option('--from <commit>', 'compare this starting commit with --revision')
+  .option('--host-sources', 'leave source text out and link style.css; the embedding page reads files by commit')
   .addOption(new Option('--watch').hideHelp())
   .on('option:watch', () => {
     console.log('Coming soon.')
     process.exit(0)
   })
-  .action(async (directory: string, options: { url?: string; revision?: string; from?: string }) => {
+  .action(async (directory: string, options: { url?: string; revision?: string; from?: string; hostSources?: boolean }) => {
     await exportWeb(directory, options)
   })
 

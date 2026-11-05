@@ -72,7 +72,8 @@ const legendKinds: C4Kind[][] = [
   ['container', 'component'],
 ]
 
-const style = `
+/** Static: the same for every payload, so a host page can serve it as `style.css`. */
+export const pageStyle = `
   ${fontCss}
   ${pluginSettingsCss}${duplicatesCss}${projectReviewCss}${settingsCss}${settingsDialogCss}
   :root {
@@ -453,14 +454,15 @@ function chromeInset(url: URL | undefined): string {
   return Number.isInteger(inset) && inset > 0 ? ` style="--chrome-inset:${inset}px"` : ''
 }
 
-export function renderPage(payload: WebBootPayload, url?: URL): string {
+export function renderPage(payload: WebBootPayload, url?: URL, stylesheet: 'inline' | 'linked' = 'inline'): string {
   const json = JSON.stringify(payload).replace(/</g, '\\u003c')
   const writable = payload.delivery.kind === 'live' && !payload.delivery.readOnly
   const readOnly = payload.delivery.kind === 'live' && payload.delivery.readOnly
     ? '<span id="read-only" title="Run groma web again to restore the missing plugins.">Read-only: plugins missing</span>' : ''
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escaped(payload.project?.title ?? 'Groma')}</title>`
     + sharingMetadata(payload.project, url)
-    + `<style>${style}</style></head><body data-delivery="${payload.delivery.kind}"${chromeInset(url)}>`
+    + (stylesheet === 'inline' ? `<style>${pageStyle}</style>` : '<link rel="stylesheet" href="./style.css">')
+    + `</head><body data-delivery="${payload.delivery.kind}"${chromeInset(url)}>`
     + `<header id="header"><div class="header-context">${lockup}<span id="stats"></span>${readOnly}${revisionControl(payload, { history: historyIcon, loader: revisionLoader })}</div>`
     + searchControl({ search: searchIcon, close: closeIcon })
     + `<div class="header-actions">${projectReviewControl}<div id="map-controls" class="controls" aria-label="Map controls"><button id="fit" aria-label="Fit map">${fitIcon}<span>Fit</span></button><button id="zoom-out" aria-label="Zoom out"><span class="control-glyph">−</span></button><span id="zoom" aria-live="polite"></span><button id="zoom-in" aria-label="Zoom in"><span class="control-glyph">+</span></button></div><div class="header-utilities">${settingsControl(themeControl())}${helpControl()}${creditsControl(infoIcon, lockup)}</div></div>`

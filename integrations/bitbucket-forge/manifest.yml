@@ -1,0 +1,20 @@
+modules:
+  bitbucket:repoPullRequestOverviewPanel:
+    - key: groma-architecture-comparison
+      title: Architecture comparison
+      resource: panel
+      resolver:
+        function: resolver
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: panel
+    path: static
+app:
+  runtime:
+    name: nodejs24.x
+permissions:
+  scopes:
+    - read:repository:bitbucket
+    - read:pullrequest:bitbucket
